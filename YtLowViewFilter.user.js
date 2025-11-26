@@ -18,7 +18,7 @@
 
     const state = {
         enabled: JSON.parse(localStorage.getItem("ytvf_enabled") || "true"),
-        threshold: Number(localStorage.getItem("ytvf_threshold") || "100000"),
+        threshold: Number(localStorage.getItem("ytvf_threshold") || "5000"),
         lifetimeHidden: Number(localStorage.getItem("ytvf_lifetime") || "0"),
         uiVisible: false,
     };

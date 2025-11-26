@@ -33,7 +33,7 @@ A customizable UserScript (for Violentmonkey/Tampermonkey) that cleans up your Y
 The script saves your preferences to your browser's `localStorage`, so your threshold and toggle state persist across sessions.
 
 *   **Enabled**: `true` / `false`
-*   **Threshold**: Number (default `100,000`)
+*   **Threshold**: Number (default `5,000`)
 *   **Lifetime Stats**: Total count of hidden videos.
 
 ## License

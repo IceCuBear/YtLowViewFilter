@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         YouTube View Filter + UI (v3.3: Fix SponsorBlock Conflict)
+// @name         YouTube View Filter + UI
 // @namespace    yt-view-filter-ui
-// @version      3.3
+// @version      3.4
 // @description  Hide low-view/members-only videos. Fixed issue where SponsorBlock content was hidden.
 // @match        https://www.youtube.com/*
 // @match        https://m.youtube.com/*

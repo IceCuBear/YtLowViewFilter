@@ -5,6 +5,8 @@
 // @description  Hide low-view/members-only videos. Fixed issue where SponsorBlock content was hidden.
 // @match        https://www.youtube.com/*
 // @match        https://m.youtube.com/*
+// @updateURL    https://raw.githubusercontent.com/IceCuBear/YtLowViewFilter/main/YtLowViewFilter.js
+// @downloadURL  https://raw.githubusercontent.com/IceCuBear/YtLowViewFilter/main/YtLowViewFilter.js
 // @run-at       document-start
 // @grant        none
 // ==/UserScript==

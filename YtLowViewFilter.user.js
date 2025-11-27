@@ -1,12 +1,10 @@
 // ==UserScript==
 // @name         YouTube View Filter + UI
 // @namespace    yt-view-filter-ui
-// @version      3.4
-// @description  Hide low-view/members-only videos. Fixed issue where SponsorBlock content was hidden.
+// @version      3.5
+// @description  Hide low-view/members-only videos.
 // @match        https://www.youtube.com/*
 // @match        https://m.youtube.com/*
-// @updateURL    https://raw.githubusercontent.com/IceCuBear/YtLowViewFilter/main/YtLowViewFilter.js
-// @downloadURL  https://raw.githubusercontent.com/IceCuBear/YtLowViewFilter/main/YtLowViewFilter.js
 // @run-at       document-start
 // @grant        none
 // ==/UserScript==
@@ -18,7 +16,7 @@
 
     const state = {
         enabled: JSON.parse(localStorage.getItem("ytvf_enabled") || "true"),
-        threshold: Number(localStorage.getItem("ytvf_threshold") || "5000"),
+        threshold: Number(localStorage.getItem("ytvf_threshold") || "100000"),
         lifetimeHidden: Number(localStorage.getItem("ytvf_lifetime") || "0"),
         uiVisible: false,
     };
@@ -56,7 +54,6 @@
     }
 
     function isMembersOnly(root) {
-        // Scan for specific text badges that indicate exclusive content
         const badges = root.querySelectorAll(
             ".yt-badge-shape__text, .yt-core-attributed-string, span, .badge-shape"
         );
@@ -68,10 +65,6 @@
                 return true;
             }
         }
-
-        // Removed the check for 'SponsorBlockIcon' here.
-        // That was causing the script to hide videos labeled by the extension.
-
         return false;
     }
 
@@ -156,7 +149,7 @@
 
     function startObserver() {
         const target = document.querySelector("ytd-page-manager") || document.body;
-        observer.observe(target, { childList: true, subtree: true });
+        observer.observe(target, {childList: true, subtree: true});
     }
 
     ////////////////////////////////////////////////////////////////////////////
@@ -181,64 +174,69 @@
     function createUI() {
         if (document.getElementById("ytvf-panel")) return;
 
+        // Helpers for curved slider: 0..1000 -> 0..1,000,000 (cubic)
+        const toThreshold = (s) => Math.floor(Math.pow(s, 3) / 1000);
+        const toSlider = (t) => Math.pow(t * 1000, 1 / 3);
+
         const panel = document.createElement("div");
         panel.id = "ytvf-panel";
         panel.style = `
-            position: fixed; top: 70px; right: 80px; width: 280px;
-            background: #0f0f0fee; border: 1px solid #333; border-radius: 12px;
-            z-index: 999999; color: white; font-family: Roboto, sans-serif; display: none;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.6); backdrop-filter: blur(4px);
-        `;
+                position: fixed; top: 70px; right: 80px; width: 280px;
+                background: #0f0f0fee; border: 1px solid #333; border-radius: 12px;
+                z-index: 999999; color: white; font-family: Roboto, sans-serif; display: none;
+                box-shadow: 0 10px 25px rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+            `;
 
         panel.innerHTML = `
-            <div id="ytvf-header" style="
-                padding: 12px; background: #1f1f1f; border-radius: 12px 12px 0 0;
-                display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; cursor: move;">
-                <span style="font-weight:bold;">Filter Settings</span>
-                <button id="ytvf-close" style="background:none; border:none; color:#aaa; font-size:20px; cursor:pointer;">×</button>
-            </div>
-
-            <div style="padding: 15px;">
-                <label style="display:flex; align-items:center; gap: 10px; cursor: pointer; margin-bottom: 15px;">
-                    <input id="ytvf-enabled" type="checkbox" ${state.enabled ? "checked":""} style="transform:scale(1.2);">
-                    <span>Enable Filtering</span>
-                </label>
-
-                <div style="margin-bottom: 15px;">
-                    <div style="display:flex; justify-content:space-between; margin-bottom:5px; font-size:12px; color:#aaa;">
-                        <span>Min View Threshold</span>
-                        <span id="ytvf-label" style="color:#fff; font-weight:bold;">${state.threshold.toLocaleString()}</span>
-                    </div>
-
-                    <div id="ytvf-slider-wrapper" style="padding: 5px 0;">
-                        <input id="ytvf-slider" type="range" min="1000" max="1000000" step="1000"
-                               style="width:100%; cursor: pointer; accent-color: #3ea6ff; display: block;">
-                    </div>
-
-                    <div style="display:flex; justify-content:space-between; font-size:10px; color:#555; margin-top:2px;">
-                        <span>1k</span><span>1M</span>
-                    </div>
+                <div id="ytvf-header" style="
+                    padding: 12px; background: #1f1f1f; border-radius: 12px 12px 0 0;
+                    display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; cursor: move;">
+                    <span style="font-weight:bold;">Filter Settings</span>
+                    <button id="ytvf-close" style="background:none; border:none; color:#aaa; font-size:20px; cursor:pointer;">×</button>
                 </div>
 
-                <div style="background: #222; padding: 10px; border-radius: 8px; font-size: 12px; color: #ccc; border: 1px solid #333;">
-                    <div style="display:flex; justify-content:space-between; margin-bottom: 4px;">
-                        <span>Hidden (Low):</span> <span id="ytvf-stats-low" style="color:#fff; font-weight:bold;">0</span>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
-                        <span>Hidden (Members):</span> <span id="ytvf-stats-mem" style="color:#fff; font-weight:bold;">0</span>
-                    </div>
-                    <div style="border-top: 1px solid #444; padding-top: 6px; margin-top: 6px; display:flex; justify-content:space-between;">
-                        <span>Total Lifetime:</span> <span id="ytvf-stats-lifetime" style="color:#3ea6ff; font-weight:bold;">${state.lifetimeHidden}</span>
-                    </div>
-                </div>
+                <div style="padding: 15px;">
+                    <label style="display:flex; align-items:center; gap: 10px; cursor: pointer; margin-bottom: 15px;">
+                        <input id="ytvf-enabled" type="checkbox" ${state.enabled ? "checked" : ""} style="transform:scale(1.2);">
+                        <span>Enable Filtering</span>
+                    </label>
 
-                <button id="ytvf-recheck" style="
-                    width:100%; margin-top:15px; padding:8px; background:#333; color:white;
-                    border:1px solid #444; border-radius:6px; cursor:pointer;">
-                    Recheck Page
-                </button>
-            </div>
-        `;
+                    <div style="margin-bottom: 15px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; font-size:12px; color:#aaa;">
+                            <span>Min View Threshold</span>
+                            <input id="ytvf-input" type="number" value="${state.threshold}"
+                                   style="background:#222; color:#fff; border:1px solid #444; width:80px; border-radius:4px; padding:2px 5px; text-align:right;">
+                        </div>
+
+                        <div id="ytvf-slider-wrapper" style="padding: 5px 0;">
+                            <input id="ytvf-slider" type="range" min="0" max="1000" step="1"
+                                   style="width:100%; cursor: pointer; accent-color: #3ea6ff; display: block;">
+                        </div>
+
+                        <div style="display:flex; justify-content:space-between; font-size:10px; color:#555; margin-top:2px;">
+                            <span>0</span><span>1M</span>
+                        </div>
+                    </div>
+
+                    <div style="background: #222; padding: 10px; border-radius: 8px; font-size: 12px; color: #ccc; border: 1px solid #333;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom: 4px;">
+                            <span>Hidden (Low):</span> <span id="ytvf-stats-low" style="color:#fff; font-weight:bold;">0</span>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+                            <span>Hidden (Members):</span> <span id="ytvf-stats-mem" style="color:#fff; font-weight:bold;">0</span>
+                        </div>
+                        <div style="border-top: 1px solid #444; padding-top: 6px; margin-top: 6px; display:flex; justify-content:space-between;">
+                            <span>Total Lifetime:</span> <span id="ytvf-stats-lifetime" style="color:#3ea6ff; font-weight:bold;">${state.lifetimeHidden}</span>
+                        </div>
+                    </div>
+
+                    <button id="ytvf-recheck" style="
+                        width:100%; margin-top:15px; padding:8px; background:#333; color:white;
+                        border:1px solid #444; border-radius:6px; cursor:pointer;">
+                        Recheck Page
+                    </button>
+                </div>
+            `;
 
         document.body.appendChild(panel);
 
@@ -270,20 +268,33 @@
         };
 
         const slider = document.getElementById("ytvf-slider");
+        const input = document.getElementById("ytvf-input");
         const sliderWrapper = document.getElementById("ytvf-slider-wrapper");
-        slider.value = state.threshold;
+
+        // Initialize slider from state
+        slider.value = toSlider(state.threshold);
 
         ['mousedown', 'mouseup', 'click', 'touchstart', 'touchend'].forEach(evt => {
             sliderWrapper.addEventListener(evt, (e) => e.stopPropagation());
         });
 
         slider.oninput = (e) => {
-            state.threshold = Number(e.target.value);
-            document.getElementById("ytvf-label").textContent = state.threshold.toLocaleString();
+            const val = toThreshold(Number(e.target.value));
+            state.threshold = val;
+            input.value = val;
             saveState();
         };
 
         slider.onchange = () => {
+            resetAndRun();
+        };
+
+        input.onchange = (e) => {
+            let val = parseInt(e.target.value, 10);
+            if (isNaN(val)) val = 0;
+            state.threshold = val;
+            slider.value = toSlider(val);
+            saveState();
             resetAndRun();
         };
 
@@ -299,6 +310,18 @@
             el.style.display = "";
         });
         filterAll();
+    }
+
+    function injectLayoutFix() {
+        if (document.getElementById("ytvf-layout-fix")) return;
+        const style = document.createElement("style");
+        style.id = "ytvf-layout-fix";
+        style.textContent = `
+                ytd-rich-grid-row {
+                    display: contents !important;
+                }
+            `;
+        document.head.appendChild(style);
     }
 
     function createCog() {
@@ -322,6 +345,7 @@
     }
 
     function init() {
+        injectLayoutFix();
         createUI();
         createCog();
         startObserver();

@@ -5,6 +5,8 @@
 // @description  Hide low-view/members-only videos.
 // @match        https://www.youtube.com/*
 // @match        https://m.youtube.com/*
+// @downloadURL  https://raw.githubusercontent.com/IceCuBear/YtLowViewFilter/main/YtLowViewFilter.js
+// @updateURL    https://raw.githubusercontent.com/IceCuBear/YtLowViewFilter/main/YtLowViewFilter.js
 // @run-at       document-start
 // @grant        none
 // ==/UserScript==

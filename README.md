@@ -1,4 +1,4 @@
-# YouTube View Filter + UI
+# YouTube View Filter
 
 A customizable UserScript (for Violentmonkey/Tampermonkey) that cleans up your YouTube feed by filtering videos by views and other criteria. It includes a floating, draggable UI panel, a masthead gear for quick access, stats, and optional preview mode.
 
@@ -17,13 +17,12 @@ A customizable UserScript (for Violentmonkey/Tampermonkey) that cleans up your Y
 *   Preview mode: mark filtered items (highlight + label) instead of hiding them
 *   Stats: counts per reason (Low, Members, Auto‑dubbed, Live) and a lifetime total
 *   Lightweight layout fix to keep grid spacing consistent when items are hidden
-*   SponsorBlock‑safe (v3.3+); current script version: 3.6
 
 ## Installation
 
 Option A — One‑click via raw URL (recommended)
 1. Install **Violentmonkey** (recommended) or **Tampermonkey**.
-2. Open this raw install/update URL in your browser and confirm installation:
+2. Open this raw install/update URL in your browser and confirm the installation:
    https://raw.githubusercontent.com/IceCuBear/YtLowViewFilter/refs/heads/main/YtLowViewFilter.user.js
 
 Option B — Manual
@@ -75,4 +74,6 @@ Ranges:
 
 ## License
 
-This project is open source. Feel free to modify and distribute.
+GNU GPLv3 — see the userscript header. © IceCuBear
+
+This project is open source. Contributions and pull requests are welcome.

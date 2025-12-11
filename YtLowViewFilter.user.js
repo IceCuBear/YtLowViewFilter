@@ -1,13 +1,20 @@
 // ==UserScript==
-// @name         YouTube View Filter + UI
-// @namespace    yt-view-filter-ui
-// @version      3.6
+// @name         YouTube View Filter
+// @namespace    https://github.com/IceCuBear/YtLowViewFilter
+// @author       IceCuBear
+// @license      GNU GPLv3
+// @version      2025.12.11.7
 // @description  Filter YouTube items by minimum views, Members‑only, Auto‑dubbed, and LIVE status. Includes a compact, draggable UI and stats.
-// @match        https://www.youtube.com/*
-// @match        https://m.youtube.com/*
 // @downloadURL  https://raw.githubusercontent.com/IceCuBear/YtLowViewFilter/refs/heads/main/YtLowViewFilter.user.js
 // @updateURL    https://raw.githubusercontent.com/IceCuBear/YtLowViewFilter/refs/heads/main/YtLowViewFilter.user.js
+// @homepageURL  https://github.com/IceCuBear/YtLowViewFilter
+// @supportURL   https://github.com/IceCuBear/YtLowViewFilter/issues
+// @source       https://github.com/IceCuBear/YtLowViewFilter
+// @icon         https://www.youtube.com/favicon.ico
+// @icon64       https://www.youtube.com/favicon.ico
 // @run-at       document-start
+// @match        https://www.youtube.com/*
+// @match        https://m.youtube.com/*
 // @grant        none
 // ==/UserScript==
 

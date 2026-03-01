@@ -55,7 +55,12 @@
         // Preview mode: show filtered items with highlight instead of hiding
         previewMode: JSON.parse(localStorage.getItem("ytvf_preview") || "false"),
     };
-
+    //Fixes, due to Youtube's New Security "Trusted Types" policy
+    if (window.trustedTypes && window.trustedTypes.createPolicy) { 
+        try {
+            window.trustedTypes.createPolicy('default', { createHTML: (s) => s });
+        } catch (e) {}
+    }
     /**
      * Persist current state to localStorage.
      */

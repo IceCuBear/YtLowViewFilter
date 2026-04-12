@@ -3,7 +3,7 @@
 // @namespace    https://github.com/IceCuBear/YtLowViewFilter
 // @author       IceCuBear
 // @license      GNU AGPLv3
-// @version      2025.12.11.7
+// @version      2026.04.12.1
 // @description  Filter YouTube items by minimum views, Members‑only, Auto‑dubbed, and LIVE status. Includes a compact, draggable UI and stats.
 // @downloadURL  https://raw.githubusercontent.com/IceCuBear/YtLowViewFilter/refs/heads/main/YtLowViewFilter.user.js
 // @updateURL    https://raw.githubusercontent.com/IceCuBear/YtLowViewFilter/refs/heads/main/YtLowViewFilter.user.js
@@ -55,12 +55,14 @@
         // Preview mode: show filtered items with highlight instead of hiding
         previewMode: JSON.parse(localStorage.getItem("ytvf_preview") || "false"),
     };
-    //Fixes, due to Youtube's New Security "Trusted Types" policy
-    if (window.trustedTypes && window.trustedTypes.createPolicy) { 
+    //Fixes, due to YouTube's New Security "Trusted Types" policy
+    if (window.trustedTypes && window.trustedTypes.createPolicy) {
         try {
-            window.trustedTypes.createPolicy('default', { createHTML: (s) => s });
-        } catch (e) {}
+            window.trustedTypes.createPolicy('default', {createHTML: (s) => s});
+        } catch (e) {
+        }
     }
+
     /**
      * Persist current state to localStorage.
      */
@@ -86,7 +88,7 @@
 
     /**
      * Parse a view-count text into a number.
-     * Examples: "1,2K" -> 1200, "1.1M" -> 1100000, "985" -> 985
+     * Examples: "1,2K" -> 1200, "1.1M" -> 1.100.000, "985" -> 985
      * @param {string} text
      * @returns {number|null} Parsed numeric value or null if not recognized
      */
@@ -118,7 +120,7 @@
      */
     function isMembersOnly(root) {
         const badges = root.querySelectorAll(
-            ".yt-badge-shape__text, .yt-core-attributed-string, span, .badge-shape"
+            ".yt-badge-shape__text, .yt-core-attributed-string, .ytAttributedStringHost, span, .badge-shape"
         );
         for (const b of badges) {
             const t = (b.textContent || "").trim().toLowerCase();
@@ -146,7 +148,7 @@
         // 3) Metadata pattern like "450 watching" (live-now counter)
         //    This avoids false positives from titles/descriptions containing the word "live".
         const meta = root.querySelectorAll(
-            '.yt-content-metadata-view-model__metadata-text, .yt-core-attributed-string'
+            '.yt-content-metadata-view-model__metadata-text, .ytContentMetadataViewModelMetadataText, .yt-core-attributed-string, .ytAttributedStringHost'
         );
         for (const m of meta) {
             const t = (m.textContent || '').trim();
@@ -165,7 +167,7 @@
     function isAutoDubbed(root) {
         // Scan common text containers for the badge text
         const nodes = root.querySelectorAll(
-            ".yt-badge-shape__text, .yt-core-attributed-string, .yt-content-metadata-view-model__metadata-text, span"
+            ".yt-badge-shape__text, .yt-core-attributed-string, .ytAttributedStringHost, .yt-content-metadata-view-model__metadata-text, .ytContentMetadataViewModelMetadataText, span"
         );
         for (const n of nodes) {
             const t = (n.textContent || "").trim();
@@ -183,7 +185,7 @@
      */
     function getLiveWatchers(root) {
         const meta = root.querySelectorAll(
-            '.yt-content-metadata-view-model__metadata-text, .yt-core-attributed-string'
+            '.yt-content-metadata-view-model__metadata-text, .ytContentMetadataViewModelMetadataText, .yt-core-attributed-string, .ytAttributedStringHost'
         );
         for (const m of meta) {
             const t = (m.textContent || '').trim();
@@ -222,8 +224,7 @@
     function filterAll() {
         if (!state.enabled) return;
 
-        const items = document.querySelectorAll(
-            [
+        const items = document.querySelectorAll([
                 "ytd-rich-item-renderer",
                 "ytd-video-renderer",
                 "ytd-grid-video-renderer",
@@ -241,7 +242,7 @@
 
             // Gather candidates from both legacy and new metadata containers in a single pass
             const metaNodes = item.querySelectorAll(
-                "#metadata-line span, span.ytd-video-meta-block, .yt-content-metadata-view-model__metadata-text, .yt-core-attributed-string"
+                "#metadata-line span, span.ytd-video-meta-block, .yt-content-metadata-view-model__metadata-text, .ytContentMetadataViewModelMetadataText, .yt-core-attributed-string, .ytAttributedStringHost"
             );
             for (const n of metaNodes) {
                 const t = n.textContent || "";
@@ -653,7 +654,6 @@
 
         // Initialize slider from state
         slider.value = toSlider(state.threshold);
-
         ['mousedown', 'mouseup', 'click', 'touchstart', 'touchend'].forEach(evt => {
             sliderWrapper.addEventListener(evt, (e) => e.stopPropagation());
         });
@@ -779,7 +779,7 @@
         mastheadButtons.insertBefore(cog, mastheadButtons.firstChild);
     }
 
-    // Close the panel when clicking outside of it (and not on the cog)
+    // Close the panel when clicking outside it (and not on the cog)
     let outsideCloseAttached = false;
 
     /**

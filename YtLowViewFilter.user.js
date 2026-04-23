@@ -3,7 +3,7 @@
 // @namespace    https://github.com/IceCuBear/YtLowViewFilter
 // @author       IceCuBear
 // @license      GNU AGPLv3
-// @version      2026.04.23.1
+// @version      2026.04.23.2
 // @description  Filter YouTube items by minimum views, Members‑only, Auto‑dubbed, and LIVE status. Includes a compact, draggable UI and stats.
 // @downloadURL  https://raw.githubusercontent.com/IceCuBear/YtLowViewFilter/refs/heads/main/YtLowViewFilter.user.js
 // @updateURL    https://raw.githubusercontent.com/IceCuBear/YtLowViewFilter/refs/heads/main/YtLowViewFilter.user.js
@@ -142,10 +142,8 @@
     function isLive(root) {
         // 1) Explicit LIVE badges on thumbnails (handles legacy and new YT DOM classes)
         if (root.querySelector('.yt-badge-shape--thumbnail-live, .ytBadgeShapeThumbnailLive')) return true;
-        // 2) Avatar LIVE ring/badge — intentionally ignored to prevent false positives
-        // if (root.querySelector('.yt-spec-avatar-shape__live-badge')) return true;
 
-        // 3) Metadata pattern like "450 watching" (live-now counter fallback)
+        // 2) Metadata pattern like "450 watching" (live-now counter fallback)
         const meta = root.querySelectorAll(
             '.yt-content-metadata-view-model__metadata-text, .ytContentMetadataViewModelMetadataText, .yt-core-attributed-string, .ytAttributedStringHost'
         );
@@ -154,7 +152,6 @@
             if (RE_WATCHING_LINE.test(t)) return true;
         }
 
-        // Do not rely on generic 'live' text in titles or aria-labels.
         return false;
     }
 
@@ -193,7 +190,6 @@
             const t = (m.textContent || '').trim();
             if (/\d/.test(t)) {
                 // Try to reliably extract the numeric viewer string (supports spaces and K/M/B suffixes for i18n variants)
-                // E.g., matches "1 000 spectateurs", "13 aktív néző", "1.2K watching"
                 const numPartMatch = t.match(/(\d[\d.,\s]*[KMEB]?)/i);
                 if (numPartMatch) {
                     const numPart = numPartMatch[1].replace(/\s/g, '');
@@ -219,7 +215,8 @@
 
     /**
      * Evaluate all candidate items on the page and apply filtering/marking.
-     * Uses data attributes to avoid reprocessing unchanged items.
+     * Uses data attributes (signatures) to avoid reprocessing unchanged items
+     * while correctly handling YouTube's DOM-recycling for sorting/filtering.
      */
     function filterAll() {
         if (!state.enabled) return;
@@ -236,24 +233,51 @@
         let hasNewStats = false;
 
         for (const item of items) {
-            if (item.dataset.ytvfChecked === "1") continue;
-
             let viewText = "";
+            let metaTextCombined = "";
 
             // Gather candidates from both legacy and new metadata containers in a single pass
             const metaNodes = item.querySelectorAll(
                 "#metadata-line span, span.ytd-video-meta-block, .yt-content-metadata-view-model__metadata-text, .ytContentMetadataViewModelMetadataText, .yt-core-attributed-string, .ytAttributedStringHost"
             );
+
             for (const n of metaNodes) {
-                const t = n.textContent || "";
+                const t = (n.textContent || "").trim();
+                if (!t) continue;
+                metaTextCombined += t + "|";
+
                 if (
+                    !viewText &&
                     RE_HAS_DIGIT.test(t) &&
                     (t.includes("megtekintés") || t.includes("views") || t.includes("Aufrufe") || RE_SHORT_SUFFIX_IN_TEXT.test(t))
                 ) {
                     viewText = t;
-                    break;
                 }
             }
+
+            // Extract the canonical video URL as a base ID
+            let href = "";
+            const linkNode = item.querySelector('a[href*="/watch"]');
+            if (linkNode) {
+                href = linkNode.getAttribute("href").split("&")[0];
+            }
+
+            // The signature ensures we detect when YouTube recycles the element for a new video
+            // (e.g. clicking 'Popular') or when metadata dynamically updates.
+            const signature = href + "|" + metaTextCombined;
+
+            // Skip if the element contents haven't changed since the last check
+            if (item.dataset.ytvfSig === signature) continue;
+
+            // If the element was recycled for a DIFFERENT video, reset its stats-counted state
+            if (item.dataset.ytvfHref && item.dataset.ytvfHref !== href) {
+                delete item.dataset.ytvfCounted;
+            }
+
+            // Save new state
+            item.dataset.ytvfHref = href;
+            item.dataset.ytvfSig = signature;
+            delete item.dataset.ytvfChecked; // legacy cleanup if transitioning
 
             // Compute signals lazily based on active toggles to reduce DOM scans
             const members = state.filterMembers ? isMembersOnly(item) : false;
@@ -264,6 +288,7 @@
             const liveWatchers = live && state.filterLive && state.liveUseThreshold ? getLiveWatchers(item) : null;
             // Only parse views if we might need it (non-LIVE items and views filter enabled)
             const views = state.filterViews && !live ? parseViews(viewText) : null;
+
             let reason = null;
 
             // 1) Members-only has highest priority
@@ -314,14 +339,12 @@
                     hasNewStats = true;
                 }
             } else {
-                // If no longer matches filtering, ensure it's visible and unmarked
+                // Video is above threshold (or filters are off): ensure it's visible
                 item.classList.remove("ytvf-marked");
                 item.classList.remove("ytvf-hidden");
                 item.style.display = "";
                 delete item.dataset.ytvfHidden;
             }
-
-            item.dataset.ytvfChecked = "1";
         }
 
         if (hasNewStats) saveState();
@@ -413,7 +436,6 @@
                         <input id="ytvf-enabled" type="checkbox" ${state.enabled ? "checked" : ""} style="transform:scale(1.2);">
                         <span>Enable Filtering</span>
                     </label>
-
 
                     <div style="margin-bottom: 12px;">
                         <div style="display:flex; align-items:center; justify-content:space-between; margin: 6px 0;">
@@ -687,8 +709,11 @@
      * Clear per-item processing flags and re-run filtering to reflect the current state.
      */
     function resetAndRun() {
-        document.querySelectorAll("[data-ytvf-checked]").forEach(el => {
+        // Clear all tracking attributes so the script fully re-evaluates the page
+        document.querySelectorAll("[data-ytvf-sig], [data-ytvf-checked]").forEach(el => {
             delete el.dataset.ytvfChecked;
+            delete el.dataset.ytvfSig;
+            delete el.dataset.ytvfHref;
             delete el.dataset.ytvfHidden;
             el.style.display = "";
             el.classList.remove("ytvf-marked");

@@ -3,7 +3,7 @@
 // @namespace    https://github.com/IceCuBear/YtLowViewFilter
 // @author       IceCuBear
 // @license      GNU AGPLv3
-// @version      2026.04.12.1
+// @version      2026.04.23.1
 // @description  Filter YouTube items by minimum views, Members‑only, Auto‑dubbed, and LIVE status. Includes a compact, draggable UI and stats.
 // @downloadURL  https://raw.githubusercontent.com/IceCuBear/YtLowViewFilter/refs/heads/main/YtLowViewFilter.user.js
 // @updateURL    https://raw.githubusercontent.com/IceCuBear/YtLowViewFilter/refs/heads/main/YtLowViewFilter.user.js
@@ -140,13 +140,12 @@
      * @returns {boolean}
      */
     function isLive(root) {
-        // 1) Explicit LIVE badges on thumbnails
-        if (root.querySelector('.yt-badge-shape--thumbnail-live')) return true;
+        // 1) Explicit LIVE badges on thumbnails (handles legacy and new YT DOM classes)
+        if (root.querySelector('.yt-badge-shape--thumbnail-live, .ytBadgeShapeThumbnailLive')) return true;
         // 2) Avatar LIVE ring/badge — intentionally ignored to prevent false positives
         // if (root.querySelector('.yt-spec-avatar-shape__live-badge')) return true;
 
-        // 3) Metadata pattern like "450 watching" (live-now counter)
-        //    This avoids false positives from titles/descriptions containing the word "live".
+        // 3) Metadata pattern like "450 watching" (live-now counter fallback)
         const meta = root.querySelectorAll(
             '.yt-content-metadata-view-model__metadata-text, .ytContentMetadataViewModelMetadataText, .yt-core-attributed-string, .ytAttributedStringHost'
         );
@@ -178,7 +177,7 @@
     }
 
     /**
-     * Extract live viewer count from metadata lines like "1.1K watching".
+     * Extract live viewer count from metadata lines like "1.1K watching" or language equivalents.
      * Returns null when not applicable or not detected.
      * @param {Element} root
      * @returns {number|null}
@@ -188,24 +187,25 @@
             '.yt-content-metadata-view-model__metadata-text, .ytContentMetadataViewModelMetadataText, .yt-core-attributed-string, .ytAttributedStringHost'
         );
         for (const m of meta) {
+            // Ignore links (like channel names containing numbers) to avoid extracting incorrect numeric metrics
+            if (m.closest('a') || m.querySelector('a')) continue;
+
             const t = (m.textContent || '').trim();
-            if (/\bwatching( now)?\b/i.test(t)) {
-                // Extract the numeric part before the word "watching"
-                const numPartMatch = t.match(/(\d[\d.,]*\s*[KM]?)\s*watching/i);
+            if (/\d/.test(t)) {
+                // Try to reliably extract the numeric viewer string (supports spaces and K/M/B suffixes for i18n variants)
+                // E.g., matches "1 000 spectateurs", "13 aktív néző", "1.2K watching"
+                const numPartMatch = t.match(/(\d[\d.,\s]*[KMEB]?)/i);
                 if (numPartMatch) {
                     const numPart = numPartMatch[1].replace(/\s/g, '');
-                    // Reuse parseViews-like logic for K/M suffix
-                    const mSuffix = numPart.match(/(\d+(?:[.,]\d+)?)\s*([KM])$/i);
+                    const mSuffix = numPart.match(/(\d+(?:[.,]\d+)?)([KMEB])?$/i);
                     if (mSuffix) {
                         let n = parseFloat(mSuffix[1].replace(',', '.'));
-                        const s = mSuffix[2].toUpperCase();
-                        if (s === 'K') n *= 1_000;
+                        const s = (mSuffix[2] || '').toUpperCase();
+                        if (s === 'K' || s === 'E') n *= 1_000;
                         if (s === 'M') n *= 1_000_000;
+                        if (s === 'B') n *= 1_000_000_000;
                         return Math.floor(n);
                     }
-                    // Fallback: strip non-digits
-                    const digits = numPart.replace(/\D/g, '');
-                    if (digits) return parseInt(digits, 10);
                 }
             }
         }

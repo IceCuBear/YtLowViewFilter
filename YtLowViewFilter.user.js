@@ -3,8 +3,8 @@
 // @namespace    https://github.com/IceCuBear/YtLowViewFilter
 // @author       IceCuBear
 // @license      GNU AGPLv3
-// @version      2026.04.23.2
-// @description  Filter YouTube items by minimum views, Members‑only, Auto‑dubbed, and LIVE status. Includes a compact, draggable UI and stats.
+// @version      2026.05.02.1
+// @description  Filter YouTube items by minimum views, Members-only, Auto-dubbed, and LIVE status. Includes a compact, draggable UI and stats.
 // @downloadURL  https://raw.githubusercontent.com/IceCuBear/YtLowViewFilter/refs/heads/main/YtLowViewFilter.user.js
 // @updateURL    https://raw.githubusercontent.com/IceCuBear/YtLowViewFilter/refs/heads/main/YtLowViewFilter.user.js
 // @homepageURL  https://github.com/IceCuBear/YtLowViewFilter
@@ -25,14 +25,14 @@
     ////////////////////////////////////////////////////////////////////////////
 
     // Precompiled patterns (avoid re-allocations in tight loops)
-    // - RE_SUFFIX: captures a number with optional decimal and a suffix (K/M/B/E)
+    // - RE_SUFFIX: captures a number with optional decimal and a suffix (K/M/B/E, localized ones like MIL/MIO/MLN)
     // - RE_HAS_DIGIT: quick check to skip non-metadata text nodes
     // - RE_SHORT_SUFFIX_IN_TEXT: lightweight hint that a views suffix is present
     // - RE_WATCHING_LINE: matches strings like "3,200 watching" or "1.2K watching now"
     // - RE_AUTO_DUBBED: matches "auto-dubbed" with normal or Unicode hyphen
-    const RE_SUFFIX = /(\d+(?:[.,]\d+)?)\s*([KMEB])\b/i;
+    const RE_SUFFIX = /(\d+(?:[.,]\d+)?)\s*(K|E|M|B|TYS|ТЫС|MIL|MİL|MIO|MLN|МЛН|MI|MRD|МЛРД)(?![a-zа-я])/i;
     const RE_HAS_DIGIT = /\d/;
-    const RE_SHORT_SUFFIX_IN_TEXT = /\d\s*[KMEB]\b/i;
+    const RE_SHORT_SUFFIX_IN_TEXT = /\d\s*(K|E|M|B|TYS|ТЫС|MIL|MİL|MIO|MLN|МЛН|MI|MRD|МЛРД)(?![a-zа-я])/i;
     const RE_WATCHING_LINE = /\b\d[\d.,]*\s*(watching|watching now)\b/i;
     const RE_AUTO_DUBBED = /auto[\-\u2010-\u2015]?dubbed/i;
 
@@ -88,12 +88,15 @@
 
     /**
      * Parse a view-count text into a number.
-     * Examples: "1,2K" -> 1200, "1.1M" -> 1.100.000, "985" -> 985
+     * Examples: "1,2K" -> 1200, "1.1M" -> 1.100.000, "985" -> 985, "No views" -> 0
      * @param {string} text
      * @returns {number|null} Parsed numeric value or null if not recognized
      */
     function parseViews(text) {
         if (!text) return null;
+
+        // Catch 0 view variants directly to avoid regex stripping wiping out non-numeric text
+        if (/(no views|nincs megtek|keine aufrufe|geen weergaven|aucune vue|sin visualizaciones|nessuna visua|brak wyśw|inga visn|ei katselu|нет прос|žádná zhlédnutí|nenhuma visua|sem visua)/i.test(text)) return 0;
 
         const match = text.match(RE_SUFFIX);
 
@@ -102,19 +105,19 @@
             const suffix = match[2].toUpperCase();
             let multiplier = 1;
 
-            if (suffix === 'K' || suffix === 'E') multiplier = 1_000;
-            if (suffix === 'M') multiplier = 1_000_000;
-            if (suffix === 'B') multiplier = 1_000_000_000;
+            if (/^(K|E|TYS|ТЫС|MIL|MİL)$/.test(suffix)) multiplier = 1_000;
+            if (/^(M|MIO|MLN|МЛН|MI)$/.test(suffix)) multiplier = 1_000_000;
+            if (/^(B|MRD|МЛРД)$/.test(suffix)) multiplier = 1_000_000_000;
 
             return parseFloat(numStr) * multiplier;
         }
 
         const digits = text.replace(/\D/g, "");
-        return digits ? parseInt(digits, 10) : null;
+        return digits ? parseInt(digits, 10) : 0;
     }
 
     /**
-     * Determine if a video is Members‑only by scanning common badge containers.
+     * Determine if a video is Members-only by scanning common badge containers.
      * @param {Element} root Container element of a video item
      * @returns {boolean}
      */
@@ -156,7 +159,7 @@
     }
 
     /**
-     * Detect the Auto‑dubbed badge across typical metadata containers.
+     * Detect the Auto-dubbed badge across typical metadata containers.
      * @param {Element} root
      * @returns {boolean}
      */
@@ -167,7 +170,7 @@
         );
         for (const n of nodes) {
             const t = (n.textContent || "").trim();
-            // Match "auto‑dubbed" allowing ASCII or Unicode hyphen
+            // Match "auto-dubbed" allowing ASCII or Unicode hyphen
             if (RE_AUTO_DUBBED.test(t)) return true;
         }
         return false;
@@ -183,23 +186,27 @@
         const meta = root.querySelectorAll(
             '.yt-content-metadata-view-model__metadata-text, .ytContentMetadataViewModelMetadataText, .yt-core-attributed-string, .ytAttributedStringHost'
         );
+        const suffixPattern = '(K|E|M|B|TYS|ТЫС|MIL|MİL|MIO|MLN|МЛН|MI|MRD|МЛРД)';
+        const extractRegex = new RegExp(`(\\d[\\d.,\\s]*${suffixPattern}?)`, 'i');
+        const parseRegex = new RegExp(`^(\\d+(?:[.,]\\d+)?)${suffixPattern}?$`, 'i');
+
         for (const m of meta) {
             // Ignore links (like channel names containing numbers) to avoid extracting incorrect numeric metrics
             if (m.closest('a') || m.querySelector('a')) continue;
 
             const t = (m.textContent || '').trim();
             if (/\d/.test(t)) {
-                // Try to reliably extract the numeric viewer string (supports spaces and K/M/B suffixes for i18n variants)
-                const numPartMatch = t.match(/(\d[\d.,\s]*[KMEB]?)/i);
+                // Try to reliably extract the numeric viewer string (supports spaces and localized suffixes)
+                const numPartMatch = t.match(extractRegex);
                 if (numPartMatch) {
                     const numPart = numPartMatch[1].replace(/\s/g, '');
-                    const mSuffix = numPart.match(/(\d+(?:[.,]\d+)?)([KMEB])?$/i);
+                    const mSuffix = numPart.match(parseRegex);
                     if (mSuffix) {
                         let n = parseFloat(mSuffix[1].replace(',', '.'));
                         const s = (mSuffix[2] || '').toUpperCase();
-                        if (s === 'K' || s === 'E') n *= 1_000;
-                        if (s === 'M') n *= 1_000_000;
-                        if (s === 'B') n *= 1_000_000_000;
+                        if (/^(K|E|TYS|ТЫС|MIL|MİL)$/.test(s)) n *= 1_000;
+                        if (/^(M|MIO|MLN|МЛН|MI)$/.test(s)) n *= 1_000_000;
+                        if (/^(B|MRD|МЛРД)$/.test(s)) n *= 1_000_000_000;
                         return Math.floor(n);
                     }
                 }
@@ -246,12 +253,42 @@
                 if (!t) continue;
                 metaTextCombined += t + "|";
 
-                if (
-                    !viewText &&
-                    RE_HAS_DIGIT.test(t) &&
-                    (t.includes("megtekintés") || t.includes("views") || t.includes("Aufrufe") || RE_SHORT_SUFFIX_IN_TEXT.test(t))
-                ) {
-                    viewText = t;
+                if (!viewText) {
+                    // Modern YouTube hides "views" in the aria-label while keeping just the number visually
+                    const ariaLabel = (n.getAttribute("aria-label") || "").toLowerCase();
+                    const hasDigit = RE_HAS_DIGIT.test(t);
+
+                    let isViewNode = false;
+
+                    const noViewsRegex = /(no views|nincs megtek|keine aufrufe|geen weergaven|aucune vue|sin visualizaciones|nessuna visua|brak wyśw|inga visn|ei katselu|нет прос|žádná zhlédnutí|nenhuma visua|sem visua)/i;
+                    const viewsRegex = /(views|megtekintés|aufrufe|weergaven|vues|visualizaciones|visualizzazioni|wyświetlenia|visningar|katselukertaa|просмотров|görüntüleme|zhlédnutí|visualizações)/i;
+
+                    // 1. Catches "No views" state
+                    if (noViewsRegex.test(t) || noViewsRegex.test(ariaLabel)) {
+                        isViewNode = true;
+                    }
+                    else if (hasDigit) {
+                        // 2. Traditional textual presence (Legacy Layout)
+                        if (viewsRegex.test(t)) {
+                            isViewNode = true;
+                        }
+                        // 3. Compact suffix (e.g., 228k, 1.7m)
+                        else if (RE_SHORT_SUFFIX_IN_TEXT.test(t)) {
+                            isViewNode = true;
+                        }
+                        // 4. ARIA label presence (Modern Layout)
+                        else if (viewsRegex.test(ariaLabel)) {
+                            isViewNode = true;
+                        }
+                        // 5. Fallback for pure numbers like "536" skipping channel names natively wrapped in <a>
+                        else if (/^\d[\d.,\s]*$/.test(t) && !n.closest('a') && !n.querySelector('a')) {
+                            isViewNode = true;
+                        }
+                    }
+
+                    if (isViewNode) {
+                        viewText = hasDigit ? t : "0";
+                    }
                 }
             }
 
@@ -313,7 +350,7 @@
                 }
                 // If filterLive is OFF, do not apply the generic views filter to LIVE items.
             }
-            // 4) Non‑LIVE items can be hidden by the views threshold
+            // 4) Non-LIVE items can be hidden by the views threshold
             else if (state.filterViews && views !== null && views < state.threshold) {
                 reason = "low";
             }
